@@ -761,6 +761,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Upgraded the frontend from Next.js `16.0.3` to `16.3.6` to address Vercel's vulnerable-version warning; lockfile, lint, and production build were refreshed.
 - Simplified wallet connection to one Connect wallet action that delegates provider/account selection to the detected EVM wallet, removing the duplicate MetaMask/Rabby selection dialog.
 - Hardened frontend failure reporting to decode finalized leader error payloads and surface contract messages such as `[EXPECTED] Invalid longitude` in a dedicated Error message panel, with activity history and explorer fallback preserved.
+- Moved nondeterministic evidence and validator logic to module-level pure functions so `run_nondet` no longer captures contract storage; the storage-pickling warning is removed from the source contract, and direct tests plus `genvm-lint check` pass.
 
 - Scope or peril selection.
 - Data source or source mapping.

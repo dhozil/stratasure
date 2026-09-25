@@ -45,6 +45,7 @@ Implemented now:
 
 Pending:
 
+- Redeploy the storage-pickle-free evidence workflow to Studionet after source validation.
 - Studionet finalization persistence for the latest deployment transaction; the contract is active and tested, but the deployment receipt remains `ACCEPTED`.
 - Fee-enabled Studio profiling; the checked-in localnet profile is zero-valued because GLSim is gasless.
 - Keeper/relayer scheduling.

@@ -11,6 +11,236 @@ ERROR_EXTERNAL = "[EXTERNAL]"
 ERROR_TRANSIENT = "[TRANSIENT]"
 
 
+def _evidence_format_coordinate(microdegrees: i64) -> str:
+    sign = "-" if microdegrees < 0 else ""
+    absolute = abs(int(microdegrees))
+    whole = absolute // 1000000
+    fraction = absolute % 1000000
+    return f"{sign}{whole}.{fraction:06d}".rstrip("0").rstrip(".")
+
+
+def _evidence_parse_fixed_milli(raw_value) -> int:
+    if raw_value is None:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Missing numeric evidence")
+    value = str(raw_value).strip()
+    if value == "" or value in ("-999", "-999.0", "-999.00", "-999.000"):
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Missing numeric evidence")
+    sign = 1
+    if value.startswith("-"):
+        sign = -1
+        value = value[1:]
+    parts = value.split(".")
+    if len(parts) > 2 or not parts[0].isdigit():
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Invalid numeric evidence")
+    whole = int(parts[0] or "0")
+    fraction = (parts[1] + "000")[:3] if len(parts) == 2 else "000"
+    if not fraction.isdigit():
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Invalid numeric evidence")
+    return sign * (whole * 1000 + int(fraction))
+
+
+def _evidence_response_json(url: str) -> dict:
+    response = gl.nondet.web.get(url)
+    if response.status >= 500:
+        raise gl.vm.UserError(f"{ERROR_TRANSIENT} Source temporarily unavailable")
+    if response.status >= 400:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned HTTP {response.status}")
+    try:
+        data = json.loads(response.body.decode("utf-8"))
+    except Exception:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned malformed JSON")
+    if not isinstance(data, dict):
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned an invalid payload")
+    return data
+
+
+def _evidence_verification_id(
+    peril: str,
+    decision: str,
+    observed_value: i64,
+    threshold: i64,
+    source_id: str,
+    source_policy_version: str,
+    source_url: str,
+    evidence_id: str,
+    evidence_timestamp: str,
+    evidence_commitment: str,
+    payout_amount: int,
+    terms_commitment: str,
+) -> str:
+    return json.dumps(
+        {
+            "decision": decision,
+            "evidence_commitment": evidence_commitment,
+            "evidence_id": evidence_id,
+            "evidence_timestamp": evidence_timestamp,
+            "observed_value": int(observed_value),
+            "payout_amount": int(payout_amount),
+            "peril": peril,
+            "source_id": source_id,
+            "source_policy_version": source_policy_version,
+            "source_url": source_url,
+            "terms_commitment": terms_commitment,
+            "threshold": int(threshold),
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _evidence_fetch_drought(
+    latitude_microdegrees: i64,
+    longitude_microdegrees: i64,
+    coverage_start: str,
+    coverage_end: str,
+    threshold: i64,
+    payout_amount: int,
+    source_url: str,
+    terms_commitment: str,
+) -> dict:
+    start = coverage_start.replace("-", "")
+    end = coverage_end.replace("-", "")
+    latitude = _evidence_format_coordinate(latitude_microdegrees)
+    longitude = _evidence_format_coordinate(longitude_microdegrees)
+    data = _evidence_response_json(source_url)
+    try:
+        values = data["properties"]["parameter"]["PRECTOTCORR"]
+    except Exception:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER payload is missing precipitation")
+    if not isinstance(values, dict) or len(values) == 0:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER returned no precipitation data")
+    total = 0
+    for raw_value in values.values():
+        total += _evidence_parse_fixed_milli(raw_value)
+    if total < 0:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER returned invalid precipitation")
+    evidence_commitment = json.dumps(values, separators=(",", ":"), sort_keys=True)
+    source_policy_version = "NASA-POWER-MVP-1"
+    triggered = total < int(threshold) * 1000
+    decision = "TRIGGERED" if triggered else "NOT_TRIGGERED"
+    evidence_id = f"NASA:{start}:{end}:{latitude}:{longitude}"
+    payout_actual = payout_amount if triggered else 0
+    return {
+        "peril": "DROUGHT",
+        "decision": decision,
+        "observed_value": total,
+        "threshold": int(threshold),
+        "source_id": "NASA_POWER",
+        "source_policy_version": source_policy_version,
+        "source_url": source_url,
+        "evidence_id": evidence_id,
+        "evidence_timestamp": coverage_end,
+        "evidence_commitment": evidence_commitment,
+        "source_confirmed": True,
+        "payout_amount": payout_actual,
+        "terms_commitment": terms_commitment,
+        "verification_id": _evidence_verification_id(
+            "DROUGHT", decision, total, threshold, "NASA_POWER", source_policy_version,
+            source_url, evidence_id, coverage_end, evidence_commitment, payout_actual, terms_commitment,
+        ),
+    }
+
+
+def _evidence_fetch_earthquake(
+    latitude_microdegrees: i64,
+    longitude_microdegrees: i64,
+    coverage_start: str,
+    coverage_end: str,
+    threshold: i64,
+    radius_km: i64,
+    payout_amount: int,
+    source_url: str,
+    terms_commitment: str,
+) -> dict:
+    data = _evidence_response_json(source_url)
+    features = data.get("features")
+    if not isinstance(features, list):
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS payload is missing features")
+    max_magnitude = 0
+    evidence_id = "NONE"
+    evidence_timestamp = coverage_end
+    for feature in features:
+        if not isinstance(feature, dict):
+            raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS feature is invalid")
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS feature properties are invalid")
+        magnitude = _evidence_parse_fixed_milli(properties.get("mag"))
+        if magnitude > max_magnitude:
+            max_magnitude = magnitude
+            evidence_id = str(properties.get("id", feature.get("id", "")))
+            evidence_timestamp = str(properties.get("time", coverage_end))
+    evidence_commitment = json.dumps([evidence_id, evidence_timestamp, max_magnitude], separators=(",", ":"))
+    source_policy_version = "USGS-CATALOG-MVP-1"
+    triggered = max_magnitude >= int(threshold)
+    decision = "TRIGGERED" if triggered else "NOT_TRIGGERED"
+    payout_actual = payout_amount if triggered else 0
+    return {
+        "peril": "EARTHQUAKE",
+        "decision": decision,
+        "observed_value": max_magnitude,
+        "threshold": int(threshold),
+        "source_id": "USGS",
+        "source_policy_version": source_policy_version,
+        "source_url": source_url,
+        "evidence_id": evidence_id,
+        "evidence_timestamp": evidence_timestamp,
+        "evidence_commitment": evidence_commitment,
+        "source_confirmed": True,
+        "payout_amount": payout_actual,
+        "terms_commitment": terms_commitment,
+        "verification_id": _evidence_verification_id(
+            "EARTHQUAKE", decision, max_magnitude, threshold, "USGS", source_policy_version,
+            source_url, evidence_id, evidence_timestamp, evidence_commitment, payout_actual, terms_commitment,
+        ),
+    }
+
+
+def _evidence_fetch(
+    peril: str,
+    latitude_microdegrees: i64,
+    longitude_microdegrees: i64,
+    coverage_start: str,
+    coverage_end: str,
+    threshold: i64,
+    radius_km: i64,
+    payout_amount: int,
+    source_url: str,
+    terms_commitment: str,
+) -> dict:
+    if peril == "DROUGHT":
+        return _evidence_fetch_drought(
+            latitude_microdegrees, longitude_microdegrees, coverage_start, coverage_end,
+            threshold, payout_amount, source_url, terms_commitment,
+        )
+    if peril == "EARTHQUAKE":
+        return _evidence_fetch_earthquake(
+            latitude_microdegrees, longitude_microdegrees, coverage_start, coverage_end,
+            threshold, radius_km, payout_amount, source_url, terms_commitment,
+        )
+    raise gl.vm.UserError(f"{ERROR_EXPECTED} Unsupported peril")
+
+
+def _evidence_compare(leader_data: dict, validator_data: dict, peril: str) -> bool:
+    if not isinstance(leader_data, dict) or not isinstance(validator_data, dict):
+        return False
+    required_fields = (
+        "peril", "decision", "observed_value", "threshold", "source_id",
+        "source_policy_version", "source_url", "evidence_id", "evidence_timestamp",
+        "evidence_commitment", "source_confirmed", "payout_amount", "terms_commitment",
+        "verification_id",
+    )
+    if any(field not in leader_data or field not in validator_data for field in required_fields):
+        return False
+    if leader_data.get("peril") != peril:
+        return False
+    if leader_data.get("decision") not in ("TRIGGERED", "NOT_TRIGGERED"):
+        return False
+    if leader_data.get("source_confirmed") is not True:
+        return False
+    return all(leader_data[field] == validator_data[field] for field in required_fields)
+
+
 @allow_storage
 @dataclass
 class Policy:
@@ -261,246 +491,6 @@ class StrataSure(gl.Contract):
             sort_keys=True,
         )
 
-    def _parse_fixed_milli(self, raw_value) -> int:
-        if raw_value is None:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Missing numeric evidence")
-        value = str(raw_value).strip()
-        if value == "" or value in ("-999", "-999.0", "-999.00", "-999.000"):
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Missing numeric evidence")
-        sign = 1
-        if value.startswith("-"):
-            sign = -1
-            value = value[1:]
-        parts = value.split(".")
-        if len(parts) > 2 or not parts[0].isdigit():
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Invalid numeric evidence")
-        whole = int(parts[0] or "0")
-        fraction = (parts[1] + "000")[:3] if len(parts) == 2 else "000"
-        if not fraction.isdigit():
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Invalid numeric evidence")
-        return sign * (whole * 1000 + int(fraction))
-
-    def _response_json(self, url: str) -> dict:
-        response = gl.nondet.web.get(url)
-        if response.status >= 500:
-            raise gl.vm.UserError(f"{ERROR_TRANSIENT} Source temporarily unavailable")
-        if response.status >= 400:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned HTTP {response.status}")
-        try:
-            data = json.loads(response.body.decode("utf-8"))
-        except Exception:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned malformed JSON")
-        if not isinstance(data, dict):
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned an invalid payload")
-        return data
-
-    def _fetch_drought_evidence(
-        self,
-        latitude_microdegrees: i64,
-        longitude_microdegrees: i64,
-        coverage_start: str,
-        coverage_end: str,
-        threshold: i64,
-        payout_amount: int,
-        source_url: str,
-        terms_commitment: str,
-    ) -> dict:
-        start = coverage_start.replace("-", "")
-        end = coverage_end.replace("-", "")
-        latitude = self._format_coordinate(latitude_microdegrees)
-        longitude = self._format_coordinate(longitude_microdegrees)
-        data = self._response_json(source_url)
-        try:
-            values = data["properties"]["parameter"]["PRECTOTCORR"]
-        except Exception:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER payload is missing precipitation")
-        if not isinstance(values, dict) or len(values) == 0:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER returned no precipitation data")
-
-        total = 0
-        for raw_value in values.values():
-            total += self._parse_fixed_milli(raw_value)
-        if total < 0:
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER returned invalid precipitation")
-
-        evidence_commitment = json.dumps(values, separators=(",", ":"), sort_keys=True)
-        source_policy_version = "NASA-POWER-MVP-1"
-        triggered = total < int(threshold) * 1000
-        decision = "TRIGGERED" if triggered else "NOT_TRIGGERED"
-        evidence_id = f"NASA:{start}:{end}:{latitude}:{longitude}"
-        payout_actual = payout_amount if triggered else 0
-        return {
-            "peril": "DROUGHT",
-            "decision": decision,
-            "observed_value": total,
-            "threshold": int(threshold),
-            "source_id": "NASA_POWER",
-            "source_policy_version": source_policy_version,
-            "source_url": source_url,
-            "evidence_id": evidence_id,
-            "evidence_timestamp": coverage_end,
-            "evidence_commitment": evidence_commitment,
-            "source_confirmed": True,
-            "payout_amount": payout_actual,
-            "terms_commitment": terms_commitment,
-            "verification_id": self._verification_id(
-                "DROUGHT",
-                decision,
-                total,
-                threshold,
-                "NASA_POWER",
-                source_policy_version,
-                source_url,
-                evidence_id,
-                coverage_end,
-                evidence_commitment,
-                payout_actual,
-                terms_commitment,
-            ),
-        }
-
-    def _fetch_earthquake_evidence(
-        self,
-        latitude_microdegrees: i64,
-        longitude_microdegrees: i64,
-        coverage_start: str,
-        coverage_end: str,
-        threshold: i64,
-        radius_km: i64,
-        payout_amount: int,
-        source_url: str,
-        terms_commitment: str,
-    ) -> dict:
-        data = self._response_json(source_url)
-        features = data.get("features")
-        if not isinstance(features, list):
-            raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS payload is missing features")
-
-        max_magnitude = 0
-        evidence_id = "NONE"
-        evidence_timestamp = coverage_end
-        for feature in features:
-            if not isinstance(feature, dict):
-                raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS feature is invalid")
-            properties = feature.get("properties")
-            if not isinstance(properties, dict):
-                raise gl.vm.UserError(f"{ERROR_EXTERNAL} USGS feature properties are invalid")
-            magnitude = self._parse_fixed_milli(properties.get("mag"))
-            if magnitude > max_magnitude:
-                max_magnitude = magnitude
-                evidence_id = str(properties.get("id", feature.get("id", "")))
-                evidence_timestamp = str(properties.get("time", coverage_end))
-
-        evidence_commitment = json.dumps(
-            [evidence_id, evidence_timestamp, max_magnitude],
-            separators=(",", ":"),
-        )
-        source_policy_version = "USGS-CATALOG-MVP-1"
-        triggered = max_magnitude >= int(threshold)
-        decision = "TRIGGERED" if triggered else "NOT_TRIGGERED"
-        payout_actual = payout_amount if triggered else 0
-        return {
-            "peril": "EARTHQUAKE",
-            "decision": decision,
-            "observed_value": max_magnitude,
-            "threshold": int(threshold),
-            "source_id": "USGS",
-            "source_policy_version": source_policy_version,
-            "source_url": source_url,
-            "evidence_id": evidence_id,
-            "evidence_timestamp": evidence_timestamp,
-            "evidence_commitment": evidence_commitment,
-            "source_confirmed": True,
-            "payout_amount": payout_actual,
-            "terms_commitment": terms_commitment,
-            "verification_id": self._verification_id(
-                "EARTHQUAKE",
-                decision,
-                max_magnitude,
-                threshold,
-                "USGS",
-                source_policy_version,
-                source_url,
-                evidence_id,
-                evidence_timestamp,
-                evidence_commitment,
-                payout_actual,
-                terms_commitment,
-            ),
-        }
-
-    def _fetch_evidence(
-        self,
-        peril: str,
-        latitude_microdegrees: i64,
-        longitude_microdegrees: i64,
-        coverage_start: str,
-        coverage_end: str,
-        threshold: i64,
-        radius_km: i64,
-        payout_amount: int,
-        source_url: str,
-        terms_commitment: str,
-    ) -> dict:
-        if peril == "DROUGHT":
-            return self._fetch_drought_evidence(
-                latitude_microdegrees,
-                longitude_microdegrees,
-                coverage_start,
-                coverage_end,
-                threshold,
-                payout_amount,
-                source_url,
-                terms_commitment,
-            )
-        if peril == "EARTHQUAKE":
-            return self._fetch_earthquake_evidence(
-                latitude_microdegrees,
-                longitude_microdegrees,
-                coverage_start,
-                coverage_end,
-                threshold,
-                radius_km,
-                payout_amount,
-                source_url,
-                terms_commitment,
-            )
-        raise gl.vm.UserError(f"{ERROR_EXPECTED} Unsupported peril")
-
-    def _compare_evidence(
-        self, leader_data: dict, validator_data: dict, peril: str
-    ) -> bool:
-        if not isinstance(leader_data, dict) or not isinstance(validator_data, dict):
-            return False
-        required_fields = (
-            "peril",
-            "decision",
-            "observed_value",
-            "threshold",
-            "source_id",
-            "source_policy_version",
-            "source_url",
-            "evidence_id",
-            "evidence_timestamp",
-            "evidence_commitment",
-            "source_confirmed",
-            "payout_amount",
-            "terms_commitment",
-            "verification_id",
-        )
-        if any(field not in leader_data or field not in validator_data for field in required_fields):
-            return False
-        if leader_data.get("peril") != peril:
-            return False
-        if leader_data.get("decision") not in ("TRIGGERED", "NOT_TRIGGERED"):
-            return False
-        if leader_data.get("source_confirmed") is not True:
-            return False
-        for field in required_fields:
-            if leader_data[field] != validator_data[field]:
-                return False
-        return True
-
     @gl.public.write.payable
     def fund_pool(self) -> None:
         self._require_owner()
@@ -621,7 +611,7 @@ class StrataSure(gl.Contract):
         terms_commitment = policy.terms_commitment
 
         def leader_fn() -> dict:
-            return self._fetch_evidence(
+            return _evidence_fetch(
                 peril,
                 latitude_microdegrees,
                 longitude_microdegrees,
@@ -641,7 +631,7 @@ class StrataSure(gl.Contract):
                 validator_data = leader_fn()
             except Exception:
                 return False
-            return self._compare_evidence(leader_result.calldata, validator_data, peril)
+            return _evidence_compare(leader_result.calldata, validator_data, peril)
 
         result = gl.vm.run_nondet(leader_fn, validator_fn)
         required_fields = (
