@@ -766,6 +766,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Removed release-version labeling from user-facing README and protocol metadata display; the project is presented as the initial StrataSure release without a `v` prefix.
 - Added a process-local `genlayer-test` compatibility bridge in `tests/direct/conftest.py` for the pinned stable runner, restoring direct contract loading, message values, storage allocation, mocked web access, non-deterministic leader/validator execution, and validator replay. All 26 direct tests now pass.
 - Upgraded the frontend from Next.js `16.0.3` to `16.3.6` to address Vercel's vulnerable-version warning; lockfile, lint, and production build were refreshed.
+- Simplified wallet connection to one Connect wallet action that delegates provider/account selection to the detected EVM wallet, removing the duplicate MetaMask/Rabby selection dialog.
 
 - Scope or peril selection.
 - Data source or source mapping.

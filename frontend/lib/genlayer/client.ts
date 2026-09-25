@@ -134,12 +134,20 @@ export function isRabbyInstalled(): boolean {
 }
 
 export function getActiveWallet(): WalletKind | null {
-  return activeWallet;
+  if (activeWallet) return activeWallet;
+  const provider = activeProvider || (typeof window !== "undefined" ? window.ethereum : null);
+  return provider ? walletKind(provider) : null;
 }
 
 export function getEthereumProvider(): EthereumProvider | null {
   if (activeProvider) return activeProvider;
-  return getAvailableWallets()[0]?.provider || (typeof window !== "undefined" ? window.ethereum || null : null);
+  if (typeof window !== "undefined" && window.ethereum) return window.ethereum;
+  return getAvailableWallets()[0]?.provider || null;
+}
+
+export function clearWalletSelection(): void {
+  activeProvider = null;
+  activeWallet = null;
 }
 
 export function selectWalletProvider(wallet: WalletKind): void {
@@ -216,8 +224,8 @@ export async function isOnGenLayerNetwork(): Promise<boolean> {
   return Boolean(chainId && parseInt(chainId, 16) === GENLAYER_CHAIN_ID);
 }
 
-export async function connectWallet(wallet: WalletKind): Promise<string> {
-  selectWalletProvider(wallet);
+export async function connectWallet(wallet?: WalletKind): Promise<string> {
+  if (wallet) selectWalletProvider(wallet);
   const accounts = await requestAccounts();
   if (!accounts || accounts.length === 0) throw new Error("No accounts found");
   if (!(await isOnGenLayerNetwork())) await switchToGenLayerNetwork();

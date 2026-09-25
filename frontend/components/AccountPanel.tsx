@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, ExternalLink, LoaderCircle, LogOut, User, WalletCards } from "lucide-react";
+import { AlertCircle, LoaderCircle, LogOut, User, WalletCards } from "lucide-react";
 import { useWallet } from "@/lib/genlayer/wallet";
-import { success, error, userRejected } from "@/lib/utils/toast";
+import { error, userRejected } from "@/lib/utils/toast";
 import { AddressDisplay } from "./AddressDisplay";
 import { Button } from "./ui/button";
 import {
@@ -15,52 +15,31 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import type { WalletKind } from "@/lib/genlayer/client";
-
-const INSTALL_URLS: Record<WalletKind, string> = {
-  metamask: "https://metamask.io/download/",
-  rabby: "https://rabby.io/",
-};
-
-const walletCopy: Record<WalletKind, { name: string; description: string }> = {
-  metamask: { name: "MetaMask", description: "Connect with the MetaMask extension or mobile wallet bridge." },
-  rabby: { name: "Rabby", description: "Connect with the Rabby wallet and its account controls." },
-};
 
 export function AccountPanel() {
   const {
     address,
-    isConnected,
-    isMetaMaskInstalled,
-    isRabbyInstalled,
-    selectedWallet,
-    isOnCorrectNetwork,
-    isLoading,
-    availableWallets,
-    connectWallet,
+     isConnected,
+     selectedWallet,
+     isOnCorrectNetwork,
+     isLoading,
+     connectWallet,
     disconnectWallet,
     switchWalletAccount,
   } = useWallet();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [connectionError, setConnectionError] = useState("");
-  const [connectingWallet, setConnectingWallet] = useState<WalletKind | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
-  const walletOptions = (Object.keys(walletCopy) as WalletKind[]).map((id) => ({ id, ...walletCopy[id], installed: availableWallets.some((wallet) => wallet.id === id) }));
 
-  const handleConnect = async (wallet: WalletKind) => {
-    if (!availableWallets.some((option) => option.id === wallet)) return;
+  const handleConnect = async () => {
     try {
-      setConnectingWallet(wallet);
       setConnectionError("");
-      await connectWallet(wallet);
-      setIsModalOpen(false);
+      await connectWallet();
     } catch (err: any) {
       const message = err?.message || "The wallet could not be connected.";
       setConnectionError(message);
       if (/reject|cancel/i.test(message)) userRejected("Connection cancelled");
       else error("Failed to connect wallet", { description: message });
-    } finally {
-      setConnectingWallet(null);
     }
   };
 
@@ -86,36 +65,10 @@ export function AccountPanel() {
 
   if (!isConnected) {
     return (
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogTrigger asChild>
-          <Button aria-label="Choose a wallet" disabled={isLoading} variant="gradient">
-            <WalletCards className="mr-2 h-4 w-4" />
-            {isLoading ? "Loading wallet" : "Connect wallet"}
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="brand-card border-2">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">Choose your wallet</DialogTitle>
-            <DialogDescription>StrataSure never stores private keys. Choose the wallet you want to use for this session.</DialogDescription>
-          </DialogHeader>
-          <div className="mt-5 space-y-3">
-            {walletOptions.map((wallet) => (
-              <div className="rounded-xl border border-[var(--line)] bg-white/[0.025] p-3" key={wallet.id}>
-                <Button className="w-full justify-between" disabled={!wallet.installed || connectingWallet !== null} onClick={() => void handleConnect(wallet.id)} variant={wallet.installed ? "gradient" : "outline"}>
-                  <span className="flex items-center gap-3">
-                    {connectingWallet === wallet.id ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
-                    <span className="text-left"><span className="block">{connectingWallet === wallet.id ? `Connecting ${wallet.name}...` : wallet.name}</span><span className="block text-xs font-normal opacity-70">{wallet.installed ? wallet.description : "Not detected in this browser"}</span></span>
-                  </span>
-                  {wallet.installed ? <ExternalLink className="h-4 w-4" /> : <AlertCircle className="h-4 w-4 text-[var(--copper)]" />}
-                </Button>
-                {!wallet.installed ? <Button className="mt-2 w-full" onClick={() => window.open(INSTALL_URLS[wallet.id], "_blank", "noopener,noreferrer")} type="button" variant="ghost"><ExternalLink className="h-3.5 w-3.5" /> Install {wallet.name}</Button> : null}
-              </div>
-            ))}
-            {!isMetaMaskInstalled && !isRabbyInstalled ? <Alert variant="default"><AlertCircle className="h-4 w-4" /><AlertTitle>No wallet detected</AlertTitle><AlertDescription>Install MetaMask or Rabby, then refresh this page to reconnect.</AlertDescription></Alert> : null}
-            {connectionError ? <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Connection error</AlertTitle><AlertDescription>{connectionError}</AlertDescription></Alert> : null}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <Button aria-label="Connect EVM wallet" disabled={isLoading} onClick={() => void handleConnect()} variant="gradient">
+        {isLoading ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <WalletCards className="mr-2 h-4 w-4" />}
+        {isLoading ? "Connecting..." : "Connect wallet"}
+      </Button>
     );
   }
 

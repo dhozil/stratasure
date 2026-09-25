@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import {
   connectWallet,
+  clearWalletSelection,
   discoverWalletProviders,
   getAccounts,
   getActiveWallet,
@@ -34,7 +35,7 @@ export interface WalletState {
 }
 
 interface WalletContextValue extends WalletState {
-  connectWallet: (wallet: WalletKind) => Promise<string>;
+  connectWallet: () => Promise<string>;
   disconnectWallet: () => void;
   switchWalletAccount: () => Promise<string>;
 }
@@ -123,10 +124,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, [state.selectedWallet]);
 
-  const connectSelectedWallet = useCallback(async (wallet: WalletKind) => {
+  const connectSelectedWallet = useCallback(async () => {
     try {
       setState((current) => ({ ...current, isLoading: true }));
-      const address = await connectWallet(wallet);
+      const address = await connectWallet();
       const chainId = await getCurrentChainId();
       const correctNetwork = await isOnGenLayerNetwork();
       const selectedWallet = getActiveWallet();
@@ -147,6 +148,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const disconnectWallet = useCallback(() => {
     if (typeof window !== "undefined") localStorage.setItem(DISCONNECT_FLAG, "true");
+    clearWalletSelection();
     setState((current) => ({ ...current, address: null, isConnected: false, selectedWallet: null }));
   }, []);
 
