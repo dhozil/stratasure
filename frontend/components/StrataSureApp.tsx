@@ -259,13 +259,42 @@ function writeStoredActivity(items: ActivityItem[]): void {
   }
 }
 
+function decodeReceiptText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    const binary = atob(trimmed);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const decoded = new TextDecoder().decode(bytes).replace(/^[\u0000-\u001f]+/, "").trim();
+    return decoded || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function receiptLeader(receipt: any): any {
+  const leaderReceipt = receipt?.consensus_data?.leader_receipt;
+  if (Array.isArray(leaderReceipt)) return leaderReceipt.find((item: any) => item?.mode === "leader") ?? leaderReceipt[0];
+  return leaderReceipt;
+}
+
 function receiptError(receipt: any): string {
-  return (
-    receipt?.genvm_result?.stderr ||
-    receipt?.error ||
-    receipt?.txExecutionResultName ||
-    "The transaction was finalized without a successful execution result."
-  );
+  const leader = receiptLeader(receipt);
+  const candidates = [
+    leader?.genvm_result?.error_description,
+    leader?.genvm_result?.stderr,
+    leader?.result,
+    receipt?.genvm_result?.error_description,
+    receipt?.genvm_result?.stderr,
+    receipt?.error,
+    receipt?.txExecutionResultName,
+  ];
+  for (const candidate of candidates) {
+    const message = decodeReceiptText(candidate);
+    if (message) return message;
+  }
+  return "The transaction was finalized without a successful execution result.";
 }
 
 function statusTone(status: string): "positive" | "warning" | "negative" | "neutral" {
@@ -364,7 +393,7 @@ function ActionBanner({ action }: { action: ActionState }) {
               {action.status}
             </span>
           </div>
-          <p className="mt-2 text-sm leading-6 text-[var(--mist)]">{action.message}</p>
+          {isFailed ? <div className="mt-3 rounded-xl border border-[rgba(222,104,89,0.25)] bg-[rgba(222,104,89,0.06)] p-3"><p className="data-label text-[#ed8a76]">Error message</p><p className="mt-2 break-words mono text-xs leading-5 text-[var(--paper)]">{action.message}</p></div> : <p className="mt-2 text-sm leading-6 text-[var(--mist)]">{action.message}</p>}
           {action.hash ? <p className="mt-3 truncate mono text-xs text-[var(--fog)]">{action.hash}</p> : null}
           {link ? (
             <a className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--lichen)] hover:underline" href={link} target="_blank" rel="noreferrer">
