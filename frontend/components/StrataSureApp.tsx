@@ -691,6 +691,7 @@ export function StrataSureApp() {
       const availableCoverage = parseGenAmount(withdrawableBalance);
       if (payout > availableCoverage) throw new Error(`Payout exceeds available risk-pool capacity: ${withdrawableBalance} GEN.`);
       if (form.coverageEnd <= form.coverageStart) throw new Error("Coverage end must be after coverage start.");
+      if (form.coverageStart < new Date().toISOString().slice(0, 10)) throw new Error("Coverage cannot start in the past.");
        const submissionResult = await submitTransaction({
          title: "Create policy",
          kind: "create",
@@ -1046,6 +1047,12 @@ function PolicyTable({ evaluations, evaluatingPolicyId, focusPolicyId, onEvaluat
 }
 
 function CreateView({ availableCoverage, form, updateForm, onSubmit, isConnected, isOnCorrectNetwork, isContractConfigured, actionInProgress }: { availableCoverage: string; form: PolicyForm; updateForm: (key: keyof PolicyForm, value: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; isConnected: boolean; isOnCorrectNetwork: boolean; isContractConfigured: boolean; actionInProgress: boolean }) {
+  const [minimumCoverageStart, setMinimumCoverageStart] = useState("");
+
+  useEffect(() => {
+    setMinimumCoverageStart(new Date().toISOString().slice(0, 10));
+  }, []);
+
   return (
     <div className="fade-up">
       <span className="eyebrow">Policy studio / new coverage</span>
@@ -1058,8 +1065,9 @@ function CreateView({ availableCoverage, form, updateForm, onSubmit, isConnected
             <label className="form-label sm:col-span-2">Location<input className="form-control" onChange={(event) => updateForm("location", event.target.value)} placeholder="Bandung, Indonesia" value={form.location} /></label>
             <label className="form-label">Latitude<input className="form-control mono" onChange={(event) => updateForm("latitude", event.target.value)} placeholder="-6.69" value={form.latitude} /></label>
             <label className="form-label">Longitude<input className="form-control mono" onChange={(event) => updateForm("longitude", event.target.value)} placeholder="107" value={form.longitude} /></label>
-            <label className="form-label">Coverage start<input className="form-control" onChange={(event) => updateForm("coverageStart", event.target.value)} type="date" value={form.coverageStart} /></label>
+            <label className="form-label">Coverage start<input className="form-control" min={minimumCoverageStart || undefined} onChange={(event) => updateForm("coverageStart", event.target.value)} type="date" value={form.coverageStart} /></label>
             <label className="form-label">Coverage end<input className="form-control" onChange={(event) => updateForm("coverageEnd", event.target.value)} type="date" value={form.coverageEnd} /></label>
+
             <label className="form-label">Threshold<input className="form-control mono" onChange={(event) => updateForm("threshold", event.target.value)} placeholder="250" value={form.threshold} /><span className="text-xs font-normal text-[var(--fog)]">Millimeters for drought · millimagnitude for earthquake</span></label>
             <label className="form-label">Earthquake radius<input className="form-control mono" disabled={form.peril !== "EARTHQUAKE"} onChange={(event) => updateForm("radius", event.target.value)} placeholder="100" value={form.radius} /><span className="text-xs font-normal text-[var(--fog)]">Radius is ignored for drought</span></label>
           </div>

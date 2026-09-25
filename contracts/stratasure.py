@@ -2,13 +2,17 @@
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from genlayer import *
 
 
 ERROR_EXPECTED = "[EXPECTED]"
 ERROR_EXTERNAL = "[EXTERNAL]"
 ERROR_TRANSIENT = "[TRANSIENT]"
+EVALUATION_GRACE_DAYS = 30
+MAX_PREMIUM = 1000 * 10**18
+MAX_PAYOUT = 1000 * 10**18
+MAX_PAYOUT_MULTIPLIER = 100
 
 
 def _evidence_format_coordinate(microdegrees: i64) -> str:
@@ -52,6 +56,20 @@ def _evidence_response_json(url: str) -> dict:
     if not isinstance(data, dict):
         raise gl.vm.UserError(f"{ERROR_EXTERNAL} Source returned an invalid payload")
     return data
+
+
+def _evidence_required_date_keys(coverage_start: str, coverage_end: str) -> set[str]:
+    try:
+        start_date = date.fromisoformat(coverage_start)
+        end_date = date.fromisoformat(coverage_end)
+    except ValueError:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} Invalid evidence date window")
+    required_keys = set()
+    current_date = start_date
+    while current_date <= end_date:
+        required_keys.add(current_date.strftime("%Y%m%d"))
+        current_date += timedelta(days=1)
+    return required_keys
 
 
 def _evidence_verification_id(
@@ -109,6 +127,9 @@ def _evidence_fetch_drought(
         raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER payload is missing precipitation")
     if not isinstance(values, dict) or len(values) == 0:
         raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER returned no precipitation data")
+    required_keys = _evidence_required_date_keys(coverage_start, coverage_end)
+    if set(values.keys()) != required_keys:
+        raise gl.vm.UserError(f"{ERROR_EXTERNAL} NASA POWER did not cover every required day")
     total = 0
     for raw_value in values.values():
         total += _evidence_parse_fixed_milli(raw_value)
@@ -360,12 +381,20 @@ class StrataSure(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Invalid coverage window")
         if (end - start).days > 366:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Coverage window is too long")
+        if start < self._transaction_date():
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Coverage cannot start in the past")
         if threshold <= 0:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Threshold must be positive")
         if premium == 0:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Premium must be positive")
         if payout_amount == 0:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Payout must be positive")
+        if premium > MAX_PREMIUM:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Premium exceeds product limit")
+        if payout_amount > MAX_PAYOUT:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Payout exceeds product limit")
+        if payout_amount > premium * MAX_PAYOUT_MULTIPLIER:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Payout exceeds premium multiple")
 
         source_id, source_policy_version, threshold_unit = self._source_for_peril(peril)
         if peril == "DROUGHT" and threshold > 1000000:
@@ -596,8 +625,11 @@ class StrataSure(gl.Contract):
         policy = self.policies[policy_id]
         if policy.status != "ACTIVE":
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Policy is not active")
-        if self._transaction_date() <= date.fromisoformat(policy.coverage_end):
+        transaction_date = self._transaction_date()
+        if transaction_date <= date.fromisoformat(policy.coverage_end):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Coverage period has not ended")
+        if transaction_date > date.fromisoformat(policy.coverage_end) + timedelta(days=EVALUATION_GRACE_DAYS):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Evaluation window is closed")
 
         peril = policy.peril
         latitude_microdegrees = policy.latitude_microdegrees
@@ -661,6 +693,16 @@ class StrataSure(gl.Contract):
             or result["threshold"] != int(policy.threshold)
         ):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Evidence commitment mismatch")
+        if result["decision"] not in ("TRIGGERED", "NOT_TRIGGERED"):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Invalid evidence decision")
+        if result["source_confirmed"] is not True:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Evidence source is not confirmed")
+        if result["payout_amount"] < 0 or result["payout_amount"] > int(policy.payout_amount):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Evidence payout exceeds policy payout")
+        if result["decision"] == "TRIGGERED" and result["payout_amount"] != int(policy.payout_amount):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Triggered evidence payout mismatch")
+        if result["decision"] == "NOT_TRIGGERED" and result["payout_amount"] != 0:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Non-triggered evidence payout mismatch")
         expected_verification_id = self._verification_id(
             result["peril"],
             result["decision"],
@@ -714,8 +756,12 @@ class StrataSure(gl.Contract):
         policy = self.policies[policy_id]
         if policy.status != "ACTIVE":
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Policy is not active")
-        if self._transaction_date() <= date.fromisoformat(policy.coverage_end):
+        transaction_date = self._transaction_date()
+        coverage_end = date.fromisoformat(policy.coverage_end)
+        if transaction_date <= coverage_end:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Coverage period has not ended")
+        if transaction_date <= coverage_end + timedelta(days=EVALUATION_GRACE_DAYS):
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Evaluation grace period is active")
         self.policies[policy_id].status = "EXPIRED"
         self.total_coverage = self.total_coverage - policy.payout_amount
 
@@ -808,9 +854,15 @@ class StrataSure(gl.Contract):
     def get_contract_info(self) -> dict:
         return {
             "name": "StrataSure",
-            "version": "2.1.0",
+            "version": "2.2.0",
             "payout_asset": "GEN",
             "evaluation_access": "permissionless",
+            "evaluation_grace_days": EVALUATION_GRACE_DAYS,
+            "economic_rules": {
+                "max_premium": MAX_PREMIUM,
+                "max_payout": MAX_PAYOUT,
+                "max_payout_multiplier": MAX_PAYOUT_MULTIPLIER,
+            },
             "perils": ["DROUGHT", "EARTHQUAKE"],
         }
 

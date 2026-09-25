@@ -1,9 +1,20 @@
 import json
+from datetime import date, timedelta
 
 from tests.direct.conftest import to_hex
 
 
 GEN = 10**18
+
+
+def _nasa_precipitation(start="2026-06-01", end="2026-08-31", value="100.0"):
+    current = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+    values = {}
+    while current <= last:
+        values[current.strftime("%Y%m%d")] = value
+        current += timedelta(days=1)
+    return values
 
 
 def _deploy(direct_deploy):
@@ -27,6 +38,7 @@ def _create_policy(
     radius_km=100,
     payout_amount=500 * GEN,
 ):
+    direct_vm.warp("2026-01-01T00:00:00Z")
     _fund(contract, direct_vm, direct_owner, 1000 * GEN)
     direct_vm.sender = direct_alice
     direct_vm.value = 10 * GEN
@@ -51,7 +63,11 @@ def test_initial_state(direct_deploy):
     assert contract.get_pool_balance() == 0
     assert contract.get_total_coverage() == 0
     assert contract.get_total_premiums() == 0
-    assert contract.get_contract_info()["name"] == "StrataSure"
+    info = contract.get_contract_info()
+    assert info["name"] == "StrataSure"
+    assert info["evaluation_grace_days"] == 30
+    assert info["economic_rules"]["max_payout"] == 1000 * GEN
+    assert info["economic_rules"]["max_payout_multiplier"] == 100
     assert contract.get_risk_summary()["policy_count"] == 0
     assert contract.get_source_catalog()[0]["source_id"] == "NASA_POWER"
     assert contract.get_source_catalog()[1]["source_id"] == "USGS"
@@ -124,6 +140,7 @@ def test_earthquake_source_is_fixed(direct_vm, direct_deploy, direct_owner, dire
 
 def test_invalid_peril_is_rejected(direct_vm, direct_deploy, direct_owner, direct_alice):
     contract = _deploy(direct_deploy)
+    direct_vm.warp("2026-01-01T00:00:00Z")
     _fund(contract, direct_vm, direct_owner, 1000 * GEN)
 
     direct_vm.sender = direct_alice
@@ -192,6 +209,54 @@ def test_invalid_coverage_window_is_rejected(
         )
 
 
+def test_coverage_cannot_start_in_past(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = _deploy(direct_deploy)
+    direct_vm.warp("2026-09-01T00:00:00Z")
+    _fund(contract, direct_vm, direct_owner, 1000 * GEN)
+    direct_vm.sender = direct_alice
+    direct_vm.value = 10 * GEN
+
+    with direct_vm.expect_revert("Coverage cannot start in the past"):
+        contract.create_policy(
+            "DROUGHT",
+            "Jakarta",
+            -6100000,
+            106000000,
+            "2026-06-01",
+            "2026-12-31",
+            250,
+            0,
+            10 * GEN,
+            500 * GEN,
+        )
+
+
+def test_economic_terms_are_bounded(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = _deploy(direct_deploy)
+    direct_vm.warp("2026-01-01T00:00:00Z")
+    _fund(contract, direct_vm, direct_owner, 1000 * GEN)
+    direct_vm.sender = direct_alice
+    direct_vm.value = 1 * GEN
+
+    with direct_vm.expect_revert("Payout exceeds premium multiple"):
+        contract.create_policy(
+            "DROUGHT",
+            "Jakarta",
+            -6100000,
+            106000000,
+            "2026-06-01",
+            "2026-08-31",
+            250,
+            0,
+            1 * GEN,
+            101 * GEN,
+        )
+
+
 def test_premium_value_must_match(
     direct_vm, direct_deploy, direct_owner, direct_alice
 ):
@@ -220,6 +285,7 @@ def test_policy_requires_risk_pool(
     direct_vm, direct_deploy, direct_owner, direct_alice
 ):
     contract = _deploy(direct_deploy)
+    direct_vm.warp("2026-01-01T00:00:00Z")
     _fund(contract, direct_vm, direct_owner, 100 * GEN)
 
     direct_vm.sender = direct_alice
@@ -251,6 +317,38 @@ def test_evaluation_is_blocked_before_coverage_end(
         contract.evaluate_policy(0)
 
 
+def test_expiry_does_not_preempt_available_evaluation(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = _deploy(direct_deploy)
+    _create_policy(contract, direct_vm, direct_owner, direct_alice)
+    direct_vm.warp("2026-09-01T00:00:00Z")
+
+    with direct_vm.expect_revert("Evaluation grace period is active"):
+        contract.expire_policy(0)
+
+    direct_vm.mock_web(
+        r".*power\.larc\.nasa\.gov.*",
+        {
+            "status": 200,
+            "body": json.dumps(
+                {
+                    "properties": {
+                        "parameter": {
+                            "PRECTOTCORR": _nasa_precipitation(value="1.0")
+                        }
+                    }
+                }
+            ),
+        },
+    )
+
+    evaluation = contract.evaluate_policy(0)
+
+    assert evaluation["decision"] == "TRIGGERED"
+    assert contract.get_policy(0)["status"] == "TRIGGERED"
+
+
 def test_drought_trigger_payouts_and_locks_policy(
     direct_vm, direct_deploy, direct_owner, direct_alice
 ):
@@ -265,10 +363,7 @@ def test_drought_trigger_payouts_and_locks_policy(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "100.0",
-                                "20260602": "100.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="1.0"),
                         }
                     }
                 }
@@ -279,7 +374,7 @@ def test_drought_trigger_payouts_and_locks_policy(
     evaluation = contract.evaluate_policy(0)
 
     assert evaluation["decision"] == "TRIGGERED"
-    assert evaluation["observed_value"] == 200000
+    assert evaluation["observed_value"] == 92000
     assert evaluation["payout_amount"] == 500 * GEN
     assert evaluation["source_id"] == "NASA_POWER"
     assert evaluation["source_url"].startswith(
@@ -313,10 +408,7 @@ def test_drought_threshold_boundary_does_not_trigger(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "125.0",
-                                "20260602": "125.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="2.72"),
                         }
                     }
                 }
@@ -327,7 +419,7 @@ def test_drought_threshold_boundary_does_not_trigger(
     evaluation = contract.evaluate_policy(0)
 
     assert evaluation["decision"] == "NOT_TRIGGERED"
-    assert evaluation["observed_value"] == 250000
+    assert evaluation["observed_value"] == 250240
     assert evaluation["payout_amount"] == 0
     assert contract.get_policy(0)["status"] == "NOT_TRIGGERED"
     assert contract.get_pool_balance() == 1010 * GEN
@@ -426,7 +518,7 @@ def test_fund_conservation_across_multiple_policies(
     assert contract.get_pool_balance() == 1020 * GEN
     assert contract.get_total_coverage() == 800 * GEN
     assert contract.get_withdrawable_balance() == 220 * GEN
-    direct_vm.warp("2026-09-01T00:00:00Z")
+    direct_vm.warp("2026-10-01T00:00:00Z")
 
     contract.expire_policy(0)
 
@@ -476,7 +568,7 @@ def test_expired_policy_releases_coverage_without_payout(
 ):
     contract = _deploy(direct_deploy)
     _create_policy(contract, direct_vm, direct_owner, direct_alice)
-    direct_vm.warp("2026-09-01T00:00:00Z")
+    direct_vm.warp("2026-10-01T00:00:00Z")
 
     contract.expire_policy(0)
 
@@ -499,10 +591,7 @@ def test_validator_reproduces_the_leader_decision(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "100.0",
-                                "20260602": "100.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="1.0"),
                         }
                     }
                 }
@@ -529,10 +618,7 @@ def test_validator_rejects_a_different_decision(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "100.0",
-                                "20260602": "100.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="1.0"),
                         }
                     }
                 }
@@ -550,10 +636,7 @@ def test_validator_rejects_a_different_decision(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "300.0",
-                                "20260602": "300.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="300.0"),
                         }
                     }
                 }
@@ -578,10 +661,7 @@ def test_validator_rejects_changed_observed_value_with_same_decision(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "100.0",
-                                "20260602": "100.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="1.0"),
                         }
                     }
                 }
@@ -599,10 +679,7 @@ def test_validator_rejects_changed_observed_value_with_same_decision(
                 {
                     "properties": {
                         "parameter": {
-                            "PRECTOTCORR": {
-                                "20260601": "120.0",
-                                "20260602": "120.0",
-                            }
+                            "PRECTOTCORR": _nasa_precipitation(value="120.0"),
                         }
                     }
                 }
@@ -633,6 +710,39 @@ def test_transient_source_failure_does_not_mutate_policy(
     )
 
     with direct_vm.expect_revert("Source temporarily unavailable"):
+        contract.evaluate_policy(0)
+
+    assert contract.get_policy(0)["status"] == "ACTIVE"
+    assert contract.get_total_coverage() == 500 * GEN
+    assert contract.get_pool_balance() == 1010 * GEN
+
+
+def test_incomplete_nasa_evidence_is_rejected(
+    direct_vm, direct_deploy, direct_owner, direct_alice
+):
+    contract = _deploy(direct_deploy)
+    _create_policy(contract, direct_vm, direct_owner, direct_alice)
+    direct_vm.warp("2026-09-01T00:00:00Z")
+    direct_vm.mock_web(
+        r".*power\.larc\.nasa\.gov.*",
+        {
+            "status": 200,
+            "body": json.dumps(
+                {
+                    "properties": {
+                        "parameter": {
+                            "PRECTOTCORR": {
+                                "20260601": "100.0",
+                                "20260602": "100.0",
+                            }
+                        }
+                    }
+                }
+            ),
+        },
+    )
+
+    with direct_vm.expect_revert("did not cover every required day"):
         contract.evaluate_policy(0)
 
     assert contract.get_policy(0)["status"] == "ACTIVE"

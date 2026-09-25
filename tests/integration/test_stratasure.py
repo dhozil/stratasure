@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 
 import pytest
 from gltest import get_contract_factory, get_validator_factory
@@ -20,6 +21,16 @@ EARTHQUAKE_URL = (
     "&latitude=-6.69&longitude=107&maxradiuskm=100"
     "&minmagnitude=6&orderby=time-asc&limit=20000"
 )
+
+
+def _nasa_precipitation(start="2026-06-01", end="2026-08-31", value="100.0"):
+    current = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+    values = {}
+    while current <= last:
+        values[current.strftime("%Y%m%d")] = value
+        current += timedelta(days=1)
+    return values
 
 
 def make_web_mock(url, body, status=200):
@@ -46,14 +57,15 @@ def make_context(mock_web_response, at=EVALUATION_TIME):
 
 
 def deploy_policy(context, peril="DROUGHT", threshold=250, radius_km=100):
+    create_context = {**context, "genvm_datetime": "2026-01-01T00:00:00Z"}
     contract = get_contract_factory("StrataSure").deploy(
         wait_until="finalized",
-        transaction_context=context,
+        transaction_context=create_context,
     )
     fund_result = contract.fund_pool(args=[]).transact(
         value=1000 * GEN,
         wait_until="finalized",
-        transaction_context=context,
+        transaction_context=create_context,
     )
     assert tx_execution_succeeded(fund_result), fund_result
     create_result = contract.create_policy(
@@ -72,7 +84,7 @@ def deploy_policy(context, peril="DROUGHT", threshold=250, radius_km=100):
     ).transact(
         value=10 * GEN,
         wait_until="finalized",
-        transaction_context=context,
+        transaction_context=create_context,
     )
     assert tx_execution_succeeded(create_result), create_result
     return contract
@@ -114,10 +126,7 @@ def test_drought_evaluation_persists_evidence_and_finalizes_payout():
             {
                 "properties": {
                     "parameter": {
-                        "PRECTOTCORR": {
-                            "20260601": "100.0",
-                            "20260602": "100.0",
-                        }
+                        "PRECTOTCORR": _nasa_precipitation(value="1.0")
                     }
                 }
             },
@@ -134,13 +143,13 @@ def test_drought_evaluation_persists_evidence_and_finalizes_payout():
 
     evaluation = contract.get_evaluation([0]).call()
     assert evaluation["decision"] == "TRIGGERED"
-    assert evaluation["observed_value"] == 200000
+    assert evaluation["observed_value"] == 92000
     assert evaluation["source_id"] == "NASA_POWER"
     assert evaluation["source_confirmed"] is True
     assert evaluation["source_url"] == DROUGHT_URL
     assert evaluation["terms_commitment"] == contract.get_policy([0]).call()["terms_commitment"]
     assert evaluation["evidence_commitment"] == json.dumps(
-        {"20260601": "100.0", "20260602": "100.0"},
+        _nasa_precipitation(value="1.0"),
         separators=(",", ":"),
         sort_keys=True,
     )
@@ -163,6 +172,67 @@ def test_drought_evaluation_persists_evidence_and_finalizes_payout():
 
 
 @pytest.mark.integration
+def test_expiry_does_not_preempt_available_evaluation():
+    context = make_context(
+        make_web_mock(
+            DROUGHT_URL,
+            {
+                "properties": {
+                    "parameter": {
+                        "PRECTOTCORR": _nasa_precipitation(value="1.0")
+                    }
+                }
+            },
+        )
+    )
+    contract = deploy_policy(context)
+
+    blocked_expiry = contract.expire_policy(args=[0]).transact(
+        wait_until="finalized",
+        transaction_context=context,
+    )
+    assert tx_execution_failed(blocked_expiry, match_std_err="Evaluation grace period is active")
+
+    result = contract.evaluate_policy(args=[0]).transact(
+        wait_until="finalized",
+        transaction_context=context,
+    )
+    assert tx_execution_succeeded(result), result
+    assert contract.get_policy([0]).call()["status"] == "TRIGGERED"
+
+
+def test_incomplete_nasa_evidence_rolls_back_evaluation():
+    context = make_context(
+        make_web_mock(
+            DROUGHT_URL,
+            {
+                "properties": {
+                    "parameter": {
+                        "PRECTOTCORR": {
+                            "20260601": "1.0",
+                            "20260602": "1.0",
+                        }
+                    }
+                }
+            },
+        )
+    )
+    contract = deploy_policy(context)
+    before_policy = contract.get_policy([0]).call()
+    before_pool = contract.get_pool_balance().call()
+    before_coverage = contract.get_total_coverage().call()
+
+    result = contract.evaluate_policy(args=[0]).transact(
+        wait_until="finalized",
+        transaction_context=context,
+    )
+
+    assert tx_execution_failed(result, match_std_err="did not cover every required day")
+    assert contract.get_policy([0]).call() == before_policy
+    assert contract.get_pool_balance().call() == before_pool
+    assert contract.get_total_coverage().call() == before_coverage
+
+
 def test_earthquake_evaluation_persists_event_evidence():
     context = make_context(
         make_web_mock(

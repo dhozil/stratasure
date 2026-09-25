@@ -16,11 +16,11 @@ StrataSure is a GenLayer parametric insurance protocol that settles policies fro
 | Settlement | Binary GEN payout after finalized consensus |
 | Frontend | Next.js policy desk with evidence and transaction activity |
 | Network | Studionet, chain ID `61999` |
-| Latest contract | `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9` |
+| Latest contract | `0x3236D69EEdE1571091D9B4607C85A7790c1593D6` |
 
 ## Current status
 
-The current Studionet deployment under test is `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9`, running the initial `StrataSure` release. Deployment transaction `0x9580af882cd1e658deb43aada45c2104afefd5ee1764a710ff63976ef5275afc` finalized successfully; deployed schema and code were verified.
+The current Studionet deployment under test is `0x3236D69EEdE1571091D9B4607C85A7790c1593D6`, running the `StrataSure` safeguards release. Deployment transaction `0x8b5cdd1c09a688fe7ecf0337bcf44c796b00bad2afbe9ccf4b4554a4ec755088` finalized successfully with `MAJORITY_AGREE`; deployed schema and code were verified.
 
 Implemented now:
 
@@ -33,6 +33,8 @@ Implemented now:
 - Drought precipitation and earthquake magnitude evaluation.
 - Policy state transitions for `TRIGGERED`, `NOT_TRIGGERED`, and `EXPIRED`.
 - Finalized GEN payout messages, duplicate-evaluation protection, and owner-only settlement controls.
+- Issuance safeguards reject retroactive coverage starts, enforce bounded product economics, and reserve a 30-day evaluation grace period after coverage ends.
+- NASA POWER evidence must contain every required daily observation key in the requested coverage window; incomplete evidence cannot settle a policy.
 - Hosted Studionet smoke tests for funding, policy creation, evidence, payout, expiry, and rollback paths.
 - Pinned `0.39.2` Studionet write smoke tests for funding, policy creation, drought evaluation, duplicate evaluation, expiry, and excess withdrawal.
 - Persistent frontend transaction activity with receipt recovery and hash correlation.
@@ -46,7 +48,7 @@ Implemented now:
 
 Pending:
 
-- Post-deployment write smoke tests with a funded operational account.
+- Complete a hosted post-coverage evaluation smoke test after a newly issued policy reaches its observation and grace window.
 - Fee-enabled Studio profiling; the checked-in localnet profile is zero-valued because GLSim is gasless.
 - Keeper/relayer scheduling.
 - Production DApp workflows, independent fallback sources, and source-outage policy.
@@ -201,7 +203,7 @@ GENLAYER_RPC_URL=https://studio.genlayer.com/api
 NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
 NEXT_PUBLIC_GENLAYER_CHAIN_NAME=GenLayer Studio Network
 NEXT_PUBLIC_GENLAYER_SYMBOL=GEN
-NEXT_PUBLIC_CONTRACT_ADDRESS=0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9
+NEXT_PUBLIC_CONTRACT_ADDRESS=0x3236D69EEdE1571091D9B4607C85A7790c1593D6
 NEXT_PUBLIC_EXPLORER_URL=https://explorer-studio.genlayer.com/
 ```
 

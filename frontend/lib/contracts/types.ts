@@ -47,6 +47,12 @@ export interface ContractInfo {
   version: string;
   payout_asset: string;
   evaluation_access: "permissionless" | "keeper";
+  evaluation_grace_days: number;
+  economic_rules: {
+    max_premium: string;
+    max_payout: string;
+    max_payout_multiplier: number;
+  };
   perils: string[];
 }
 
