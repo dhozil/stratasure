@@ -181,6 +181,31 @@ npm install
 npm run dev
 ```
 
+## Vercel deployment
+
+Import `https://github.com/dhozil/stratasure` as a Vercel project with these settings:
+
+- Root Directory: `frontend`
+- Framework Preset: Next.js
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output: Next.js default output
+- Node.js: 20 or newer
+
+Add these environment variables in Vercel for Preview and Production:
+
+```text
+NEXT_PUBLIC_GENLAYER_RPC_URL=/api/genlayer-rpc
+GENLAYER_RPC_URL=https://studio.genlayer.com/api
+NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
+NEXT_PUBLIC_GENLAYER_CHAIN_NAME=GenLayer Studio Network
+NEXT_PUBLIC_GENLAYER_SYMBOL=GEN
+NEXT_PUBLIC_CONTRACT_ADDRESS=0x02fA974A11762521E31A17d1f29B3B4C940539CC
+NEXT_PUBLIC_EXPLORER_URL=https://explorer-studio.genlayer.com/
+```
+
+Do not commit `.env.local`. The checked-in `frontend/.env.example` is the deployment template; replace the contract address if a different network or contract is selected.
+
 ## Documentation
 
 - GenLayer documentation: https://docs.genlayer.com/
