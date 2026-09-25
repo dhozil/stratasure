@@ -1,0 +1,16 @@
+{
+  "name": "StrataSure",
+  "short_name": "StrataSure",
+  "description": "Objective parametric insurance settlement on GenLayer.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b110e",
+  "theme_color": "#c6ed74",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+svg"
+    }
+  ]
+}

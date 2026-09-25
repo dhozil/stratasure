@@ -1,0 +1,23 @@
+{
+  "name": "stratasure",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "lint": "cd frontend && npm run lint",
+    "test:integration": "gltest tests/integration/ -v -s",
+    "test:fees": "gltest tests/integration/ -v -s --fee-profile frontend/fee-profile.json",
+    "deploy": "npx --yes genlayer@0.39.2 deploy"
+  },
+  "devDependencies": {
+    "genlayer-js": "1.1.8"
+  }
+}
