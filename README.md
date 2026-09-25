@@ -16,11 +16,11 @@ StrataSure is a GenLayer parametric insurance protocol that settles policies fro
 | Settlement | Binary GEN payout after finalized consensus |
 | Frontend | Next.js policy desk with evidence and transaction activity |
 | Network | Studionet, chain ID `61999` |
-| Latest contract | `0x02fA974A11762521E31A17d1f29B3B4C940539CC` |
+| Latest contract | `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9` |
 
 ## Current status
 
-The current Studionet deployment under test is `0x02fA974A11762521E31A17d1f29B3B4C940539CC`, running the initial `StrataSure` release. The contract is active and accepts finalized writes; its deployment receipt remains `ACCEPTED` pending network finalization.
+The current Studionet deployment under test is `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9`, running the initial `StrataSure` release. Deployment transaction `0x9580af882cd1e658deb43aada45c2104afefd5ee1764a710ff63976ef5275afc` finalized successfully; deployed schema and code were verified.
 
 Implemented now:
 
@@ -45,8 +45,7 @@ Implemented now:
 
 Pending:
 
-- Redeploy the storage-pickle-free evidence workflow to Studionet after source validation.
-- Studionet finalization persistence for the latest deployment transaction; the contract is active and tested, but the deployment receipt remains `ACCEPTED`.
+- Post-deployment write smoke tests with a funded operational account.
 - Fee-enabled Studio profiling; the checked-in localnet profile is zero-valued because GLSim is gasless.
 - Keeper/relayer scheduling.
 - Production DApp workflows, independent fallback sources, and source-outage policy.
@@ -201,7 +200,7 @@ GENLAYER_RPC_URL=https://studio.genlayer.com/api
 NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
 NEXT_PUBLIC_GENLAYER_CHAIN_NAME=GenLayer Studio Network
 NEXT_PUBLIC_GENLAYER_SYMBOL=GEN
-NEXT_PUBLIC_CONTRACT_ADDRESS=0x02fA974A11762521E31A17d1f29B3B4C940539CC
+NEXT_PUBLIC_CONTRACT_ADDRESS=0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9
 NEXT_PUBLIC_EXPLORER_URL=https://explorer-studio.genlayer.com/
 ```
 

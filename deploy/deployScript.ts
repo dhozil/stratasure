@@ -62,11 +62,20 @@ async function waitForFinalization(runtimeClient: any, hash: TransactionHash): P
     return runtimeClient.waitForFinalization({ hash });
   }
   if (typeof runtimeClient.waitForTransactionReceipt === "function") {
+    let transaction: any;
     try {
-      return await runtimeClient.waitForTransactionReceipt({ hash });
+      transaction = await runtimeClient.waitForTransactionReceipt({ hash, waitUntil: "decided", fullTransaction: true });
     } catch {
-      return runtimeClient.waitForTransactionReceipt(hash);
+      transaction = await runtimeClient.waitForTransactionReceipt(hash);
     }
+    if (isFinalized(transaction)) return transaction;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      if (typeof runtimeClient.getTransaction !== "function") break;
+      transaction = await runtimeClient.getTransaction({ hash });
+      if (isFinalized(transaction)) return transaction;
+    }
+    return transaction;
   }
   if (typeof runtimeClient.waitForDecision === "function") {
     try {

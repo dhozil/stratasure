@@ -762,6 +762,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Simplified wallet connection to one Connect wallet action that delegates provider/account selection to the detected EVM wallet, removing the duplicate MetaMask/Rabby selection dialog.
 - Hardened frontend failure reporting to decode finalized leader error payloads and surface contract messages such as `[EXPECTED] Invalid longitude` in a dedicated Error message panel, with activity history and explorer fallback preserved.
 - Moved nondeterministic evidence and validator logic to module-level pure functions so `run_nondet` no longer captures contract storage; the storage-pickling warning is removed from the source contract, and direct tests plus `genvm-lint check` pass.
+- Redeployed the storage-pickle-free contract to Studionet at `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9`; deployment transaction `0x9580af882cd1e658deb43aada45c2104afefd5ee1764a710ff63976ef5275afc` finalized successfully and deployed schema/code were verified. Updated the local frontend contract configuration to the new address.
 
 - Scope or peril selection.
 - Data source or source mapping.
