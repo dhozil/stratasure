@@ -44,7 +44,7 @@ Implemented now:
 
 Pending:
 
-- Windows direct-runner compatibility for the pinned stable runner.
+- Direct-runner compatibility for the pinned stable runner (`unexpected end of memory` in the current `genlayer-test` loader).
 - Studionet finalization persistence for the latest deployment transaction; the contract is active and tested, but the deployment receipt remains `ACCEPTED`.
 - Fee-enabled Studio profiling; the checked-in localnet profile is zero-valued because GLSim is gasless.
 - Keeper/relayer scheduling.
