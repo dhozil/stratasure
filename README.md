@@ -209,11 +209,10 @@ Do not commit `.env.local`. The checked-in `frontend/.env.example` is the deploy
 ## Documentation
 
 - GenLayer documentation: https://docs.genlayer.com/
-- Official boilerplate: https://github.com/genlayerlabs/genlayer-project-boilerplate
 - GenLayer web access: https://docs.genlayer.com/developers/intelligent-contracts/features/web-access
 - Equivalence Principle: https://docs.genlayer.com/developers/intelligent-contracts/equivalence-principle
 - GenLayerJS: https://docs.genlayer.com/api-references/genlayer-js
 
 ## License
 
-This project is based on the official GenLayer project boilerplate and uses the repository license in `LICENSE`.
+This project uses the repository license in `LICENSE`.

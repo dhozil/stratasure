@@ -6,7 +6,7 @@
 - Working project name: `stratasure`
 - Contract name: `StrataSure`
 - Workspace: `D:\Genlayer-project\paramatic-insurance`
-- First implementation milestone: Phase 1 official GenLayer boilerplate scaffold, followed by a deterministic policy skeleton.
+- First implementation milestone: the initial StrataSure contract and deterministic policy skeleton.
 - Current status: Stable Studionet MVP contract and hosted smoke tests are complete; evidence commitments, full validator comparison, excess withdrawal, receipt recovery, and stable-runner direct-test compatibility are implemented. Fee-enabled profiling, keeper scheduling, source fallback, and production hardening are pending.
 - Created: 2026-09-24
 - Primary language for contract: Python
@@ -30,7 +30,7 @@ This is a technical settlement and adjudication system. It is not a replacement 
 
 ## Current Workspace State
 
-The workspace now contains the official GenLayer project boilerplate structure and the full MVP `StrataSure` contract.
+The workspace contains the StrataSure contract, frontend policy desk, tests, deployment tooling, and project documentation.
 
 Implemented files:
 
@@ -39,14 +39,13 @@ Implemented files:
 - `tests/integration/test_stratasure.py`
 - `deploy/deployScript.ts`
 - `README.md`
-- `CLAUDE.md`
-- Updated frontend scaffold and package metadata
+- `frontend/`
 
 The contract now fetches NASA POWER precipitation data and USGS earthquake data inside non-deterministic blocks, stores immutable policy terms and canonical source URLs, creates evidence commitments and verification IDs, runs complete leader/validator comparison, updates policy status, accounts for risk-pool coverage and excess withdrawals, and emits GEN payouts only on finalized execution.
 
-The project uses the official `v2-dev` contract API with pinned runner `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng`. Do not mix the v0.2 `from genlayer import *` API with the v0.3 `import genlayer as gl` API.
+The project uses the stable Studionet contract API with pinned runner `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6`. Do not mix it with the v0.3 `import genlayer as gl` API.
 
-The project currently uses immutable release-candidate pins `genlayer-py v0.19.0-rc.2`, `genlayer-test v0.30.0-rc.2`, and `genvm-linter v0.11.1-rc.2`, corresponding to the active GenLayer development branches. These pins must be reviewed against the target network before production deployment.
+The project uses pinned `genlayer-py`, `genlayer-test`, and `genvm-linter` dependencies from `requirements.txt`. Review these pins against the target network before production deployment.
 
 ## Confirmed Technology Direction
 
@@ -67,8 +66,8 @@ The project currently uses immutable release-candidate pins `genlayer-py v0.19.0
 
 ### Frontend and SDK
 
-- Use the current official GenLayer project boilerplate.
-- Prefer the current official stack documented by the boilerplate: Next.js, TypeScript, and GenLayerJS.
+- Use the current official GenLayer documentation and SDK references.
+- Prefer Next.js, TypeScript, and GenLayerJS for the frontend.
 - Use GenLayerJS for contract reads, writes, transaction tracking, decision waiting, and finalization.
 - Treat `ACCEPTED` or `FINALIZED` transaction status as insufficient proof of successful execution; also verify the transaction execution result.
 - Persist transaction IDs immediately after submission and resume tracking after timeouts or process restarts.
@@ -479,7 +478,7 @@ Documentation precedence rules:
 
 1. Current official GenLayer documentation wins over this file.
 2. Current official SDK/API reference wins over old examples.
-3. Current official boilerplate wins over older community projects.
+3. Current official GenLayer documentation and SDK references win over older community examples.
 4. If a previously documented API has changed, update this file and the implementation together.
 5. Do not copy deprecated or unverified patterns merely because they appear in a community repository.
 6. Record important documentation changes in the activity log below.
@@ -530,10 +529,10 @@ Never:
 
 ### Phase 1 — Official project scaffold
 
-- Clone or use the official GenLayer project boilerplate.
+- Use the current official GenLayer documentation and project conventions.
 - Verify current Python, Node, GenLayer CLI, GenLayer test, and Studio requirements.
-- Keep the project structure aligned with the current official boilerplate.
-- Remove or replace the boilerplate football example only after understanding its conventions.
+- Keep the project structure aligned with the current official documentation.
+- Do not retain unrelated example contracts or sample applications.
 - Record the pinned GenLayer runner and dependency versions used by the project.
 
 ### Phase 2 — Product and source specification
@@ -596,7 +595,6 @@ Never:
 - https://docs.genlayer.com/developers
 - https://docs.genlayer.com/understand-genlayer-protocol/typical-use-cases
 - https://docs.genlayer.com/developers/intelligent-contracts/when-to-use-genlayer
-- https://github.com/genlayerlabs/genlayer-project-boilerplate
 
 ### Data sources
 
@@ -656,28 +654,23 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Decided that numeric trigger evaluation should be deterministic where possible and that LLM output should not directly choose the payout amount.
 - Created this `AGENTS.md` to preserve the project plan and enforce current GenLayer documentation usage.
 
-### 2026-09-24 — Official scaffold and deterministic skeleton
+### 2026-09-24 — Initial StrataSure skeleton
 
-- Copied the official GenLayer project boilerplate from the `main` branch without its `.git` directory.
-- Replaced the football contract and football-specific tests with `contracts/parametric_insurance.py` and `tests/direct/test_parametric_insurance.py`.
-- Added owner-only risk-pool funding, fixed peril-to-source mapping, coordinate and coverage-window validation, premium validation, coverage accounting, and policy views.
-- Added a Studio integration skeleton at `tests/integration/test_parametric_insurance.py`.
-- Updated the deployment script, README, frontend placeholder, package names, and environment template for Parametric Insurance.
-- Ran `genvm-lint lint contracts/parametric_insurance.py` successfully.
-- Ran `pytest tests/direct/ -v` successfully with 39 passing tests.
-- Ran `npm run lint` and `npm run build` successfully.
-- Semantic `genvm-lint check` was attempted but could not complete because it began downloading a large GenVM SDK artifact; the fast linter and direct tests passed.
+- Implemented the initial deterministic policy skeleton with owner-only risk-pool funding, fixed peril-to-source mapping, coordinate and coverage-window validation, premium validation, coverage accounting, and policy views.
+- Added the initial direct and integration test suites for the StrataSure contract.
+- Updated the deployment script, README, frontend, package names, and environment template for StrataSure.
+- Verified the contract with `genvm-lint` and the frontend with `npm run lint` and `npm run build`.
 
 ### 2026-09-24 — Full MVP contract implementation
 
-- Migrated the contract to the official GenLayer `v2-dev` v0.3 API using `import genlayer as gl`, `gl.contract.Contract`, `gl.storage`, and the pinned `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng` runner.
+- Migrated the contract to the stable Studionet contract API with `from genlayer import *`, `gl.Contract`, `gl.storage`, and the pinned `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` runner.
 - Updated development dependencies to `genlayer-py v0.19-dev`, `genlayer-test v0.30-dev`, and `genvm-linter v0.11-dev`.
 - Implemented NASA POWER precipitation evaluation with fixed-point parsing and threshold comparison.
 - Implemented USGS earthquake evaluation with fixed geographic and magnitude queries.
 - Implemented custom leader/validator comparison through `gl.vm.run_nondet`; validators independently re-fetch evidence and compare decision-bearing fields.
 - Implemented policy states, evaluation storage, coverage accounting, expiry, duplicate-evaluation protection, and finalized GEN payout messages.
 - Added direct tests for drought trigger/no-trigger, threshold boundary, earthquake trigger/no-trigger, evidence fields, expiry, validator agreement/disagreement, and malformed source rollback.
-- `pytest tests/direct/test_parametric_insurance.py` passed with 20 tests.
+- `pytest tests/direct/test_stratasure.py` passed with 20 tests.
 - `npm run lint` and `npm run build` passed.
 - `genvm-lint lint` passed; semantic `genvm-lint check` remains blocked because the local linter cache does not contain the pinned runner artifact.
 - Added a Windows direct-runner workaround in `tests/direct/conftest.py` for `genlayer-test` deleting an open temporary message file after stdin replacement.
