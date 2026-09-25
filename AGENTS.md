@@ -765,6 +765,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Updated the README with the current initial StrataSure contract, deployment status, logo, at-a-glance table, lifecycle diagram, modern policy-desk workflow, and expanded project structure.
 - Removed release-version labeling from user-facing README and protocol metadata display; the project is presented as the initial StrataSure release without a `v` prefix.
 - Added a process-local `genlayer-test` compatibility bridge in `tests/direct/conftest.py` for the pinned stable runner, restoring direct contract loading, message values, storage allocation, mocked web access, non-deterministic leader/validator execution, and validator replay. All 26 direct tests now pass.
+- Upgraded the frontend from Next.js `16.0.3` to `16.3.6` to address Vercel's vulnerable-version warning; lockfile, lint, and production build were refreshed.
 
 - Scope or peril selection.
 - Data source or source mapping.
