@@ -39,12 +39,12 @@ Implemented now:
 - My Policies, Active, Settled, and Expired filter tabs with focused post-create navigation.
 - Coverage-aware Evaluate controls: locked before the end date, loading during evaluation, and consensus Detail modal after settlement.
 - Direct tests with mocked source responses and validator disagreement checks.
+- Direct tests run against the pinned stable runner with a process-local `genlayer-test` compatibility bridge.
 - GLSim integration tests with deterministic NASA/USGS web mocks, finalized evaluation, payout-state, and rollback checks.
 - Windows GLSim compatibility launcher and repeatable fee-profile workflow.
 
 Pending:
 
-- Direct-runner compatibility for the pinned stable runner (`unexpected end of memory` in the current `genlayer-test` loader).
 - Studionet finalization persistence for the latest deployment transaction; the contract is active and tested, but the deployment receipt remains `ACCEPTED`.
 - Fee-enabled Studio profiling; the checked-in localnet profile is zero-valued because GLSim is gasless.
 - Keeper/relayer scheduling.

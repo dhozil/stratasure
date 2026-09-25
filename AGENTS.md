@@ -7,7 +7,7 @@
 - Contract name: `StrataSure`
 - Workspace: `D:\Genlayer-project\paramatic-insurance`
 - First implementation milestone: Phase 1 official GenLayer boilerplate scaffold, followed by a deterministic policy skeleton.
-- Current status: Stable Studionet MVP contract and hosted smoke tests are complete; evidence commitments, full validator comparison, excess withdrawal, and receipt recovery are implemented. Windows direct-runner compatibility, fee-enabled profiling, keeper scheduling, source fallback, and production hardening are pending.
+- Current status: Stable Studionet MVP contract and hosted smoke tests are complete; evidence commitments, full validator comparison, excess withdrawal, receipt recovery, and stable-runner direct-test compatibility are implemented. Fee-enabled profiling, keeper scheduling, source fallback, and production hardening are pending.
 - Created: 2026-09-24
 - Primary language for contract: Python
 - Primary chain/protocol: GenLayer
@@ -764,6 +764,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Added evaluation loading state to the selected policy, persisted settled evaluation records across portfolio refreshes, and added a Detail modal with consensus, observed value, threshold, payout, source, evidence, and verification fields.
 - Updated the README with the current initial StrataSure contract, deployment status, logo, at-a-glance table, lifecycle diagram, modern policy-desk workflow, and expanded project structure.
 - Removed release-version labeling from user-facing README and protocol metadata display; the project is presented as the initial StrataSure release without a `v` prefix.
+- Added a process-local `genlayer-test` compatibility bridge in `tests/direct/conftest.py` for the pinned stable runner, restoring direct contract loading, message values, storage allocation, mocked web access, non-deterministic leader/validator execution, and validator replay. All 26 direct tests now pass.
 
 - Scope or peril selection.
 - Data source or source mapping.
