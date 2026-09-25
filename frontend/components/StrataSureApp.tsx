@@ -150,6 +150,26 @@ function parseGenAmount(value: string): bigint {
   return BigInt(normalized);
 }
 
+function parsePositiveInteger(value: string, label: string): bigint {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`${label} must be a whole positive number.`);
+  }
+  const parsed = BigInt(normalized);
+  if (parsed <= 0n) {
+    throw new Error(`${label} must be greater than zero.`);
+  }
+  return parsed;
+}
+
+function parsePositiveGenAmount(value: string, label: string): bigint {
+  const parsed = parsePositiveInteger(value, label);
+  if (parsed <= 0n) {
+    throw new Error(`${label} must be greater than zero.`);
+  }
+  return parsed;
+}
+
 function microdegrees(value: string, label: string): bigint {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) throw new Error(`${label} must be a valid coordinate.`);
@@ -664,11 +684,10 @@ export function StrataSureApp() {
   const createPolicy = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const premium = parseGenAmount(form.premium);
-      const payout = parseGenAmount(form.payout);
-      const threshold = BigInt(form.threshold);
-      const radius = form.peril === "EARTHQUAKE" ? BigInt(form.radius) : 0n;
-      if (threshold <= 0n || (form.peril === "EARTHQUAKE" && radius <= 0n) || premium <= 0n || payout <= 0n) throw new Error("Threshold, premium, and payout must be positive.");
+      const premium = parsePositiveGenAmount(form.premium, "Premium");
+      const payout = parsePositiveGenAmount(form.payout, "Payout if triggered");
+      const threshold = parsePositiveInteger(form.threshold, "Threshold");
+      const radius = form.peril === "EARTHQUAKE" ? parsePositiveInteger(form.radius, "Earthquake radius") : 0n;
       const availableCoverage = parseGenAmount(withdrawableBalance);
       if (payout > availableCoverage) throw new Error(`Payout exceeds available risk-pool capacity: ${withdrawableBalance} GEN.`);
       if (form.coverageEnd <= form.coverageStart) throw new Error("Coverage end must be after coverage start.");
@@ -1044,7 +1063,7 @@ function CreateView({ availableCoverage, form, updateForm, onSubmit, isConnected
             <label className="form-label">Threshold<input className="form-control mono" onChange={(event) => updateForm("threshold", event.target.value)} placeholder="250" value={form.threshold} /><span className="text-xs font-normal text-[var(--fog)]">Millimeters for drought · millimagnitude for earthquake</span></label>
             <label className="form-label">Earthquake radius<input className="form-control mono" disabled={form.peril !== "EARTHQUAKE"} onChange={(event) => updateForm("radius", event.target.value)} placeholder="100" value={form.radius} /><span className="text-xs font-normal text-[var(--fog)]">Radius is ignored for drought</span></label>
           </div>
-          <div className="mt-8 border-t border-[var(--line)] pt-7"><div className="flex items-center justify-between gap-4"><div><p className="data-label">02 / Capital</p><h2 className="mt-2 text-xl font-semibold tracking-[-0.04em]">Fund the binary payout</h2></div><WalletCards className="h-5 w-5 text-[var(--lichen)]" /></div><div className="mt-7 grid gap-5 sm:grid-cols-2"><label className="form-label">Premium (GEN)<input className="form-control mono" min="1" onChange={(event) => updateForm("premium", event.target.value)} step="1" type="number" value={form.premium} /></label><label className="form-label">Payout if triggered (GEN)<input className="form-control mono" min="1" onChange={(event) => updateForm("payout", event.target.value)} max={availableCoverage} step="1" type="number" value={form.payout} /><span className="text-xs font-normal text-[var(--fog)]">Available excess coverage: {availableCoverage} GEN</span></label></div></div>
+          <div className="mt-8 border-t border-[var(--line)] pt-7"><div className="flex items-center justify-between gap-4"><div><p className="data-label">02 / Capital</p><h2 className="mt-2 text-xl font-semibold tracking-[-0.04em]">Fund the binary payout</h2></div><WalletCards className="h-5 w-5 text-[var(--lichen)]" /></div><div className="mt-7 grid items-stretch gap-5 sm:grid-cols-2"><div className="flex min-h-[6.75rem] flex-col gap-2 rounded-xl border border-[var(--line)] bg-white/[0.02] p-4"><label className="form-label" htmlFor="policy-premium">Premium (GEN)</label><input className="form-control mono" id="policy-premium" inputMode="numeric" min="1" onChange={(event) => updateForm("premium", event.target.value.replace(/[^0-9]/g, ""))} pattern="[0-9]+" step="1" type="text" value={form.premium} /></div><div className="flex min-h-[6.75rem] flex-col gap-2 rounded-xl border border-[var(--line)] bg-white/[0.02] p-4"><label className="form-label" htmlFor="policy-payout">Payout if triggered (GEN)</label><input className="form-control mono" id="policy-payout" inputMode="numeric" min="1" onChange={(event) => updateForm("payout", event.target.value.replace(/[^0-9]/g, ""))} pattern="[0-9]+" step="1" type="text" value={form.payout} /><span className="text-xs font-normal text-[var(--fog)]">Available excess coverage: {availableCoverage} GEN</span></div></div></div>
           {!isContractConfigured ? <div className="mt-6 rounded-xl border border-[rgba(215,139,97,0.32)] bg-[rgba(215,139,97,0.07)] p-4 text-sm text-[var(--copper)]">Set <span className="mono">NEXT_PUBLIC_CONTRACT_ADDRESS</span> before creating a live policy.</div> : null}
           {!isConnected ? <div className="mt-6 rounded-xl border border-[rgba(215,139,97,0.32)] bg-[rgba(215,139,97,0.07)] p-4 text-sm text-[var(--copper)]">Connect a wallet before creating a policy.</div> : null}
           {isConnected && !isOnCorrectNetwork ? <div className="mt-6 rounded-xl border border-[rgba(222,104,89,0.35)] bg-[rgba(222,104,89,0.07)] p-4 text-sm text-[#ed8a76]">Switch MetaMask to the configured GenLayer network before signing.</div> : null}

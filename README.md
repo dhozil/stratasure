@@ -34,6 +34,7 @@ Implemented now:
 - Policy state transitions for `TRIGGERED`, `NOT_TRIGGERED`, and `EXPIRED`.
 - Finalized GEN payout messages, duplicate-evaluation protection, and owner-only settlement controls.
 - Hosted Studionet smoke tests for funding, policy creation, evidence, payout, expiry, and rollback paths.
+- Pinned `0.39.2` Studionet write smoke tests for funding, policy creation, drought evaluation, duplicate evaluation, expiry, and excess withdrawal.
 - Persistent frontend transaction activity with receipt recovery and hash correlation.
 - Modern StrataSure policy desk with Overview, Policies, Create policy, How it works, and Activity views.
 - My Policies, Active, Settled, and Expired filter tabs with focused post-create navigation.

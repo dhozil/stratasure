@@ -764,6 +764,7 @@ Do not silently resolve these decisions in code. Record the decision and its rat
 - Moved nondeterministic evidence and validator logic to module-level pure functions so `run_nondet` no longer captures contract storage; the storage-pickling warning is removed from the source contract, and direct tests plus `genvm-lint check` pass.
 - Redeployed the storage-pickle-free contract to Studionet at `0xDa96b0e8EaD84f2bFDC984d13710D42B620Ea0a9`; deployment transaction `0x9580af882cd1e658deb43aada45c2104afefd5ee1764a710ff63976ef5275afc` finalized successfully and deployed schema/code were verified. Updated the local frontend contract configuration to the new address.
 - Reclassified Studionet write transactions with `NO_MAJORITY` and no leader receipt as unverified network liveness, not contract-method failure. Write verification requires isolated single-method retries, queue/nonce checks, backoff, and a leader execution receipt.
+- Completed funded Studionet smoke tests against the storage-pickle-free contract using pinned `genlayer@0.39.2`: funding, drought policy creation and evaluation, duplicate-evaluation rollback, earthquake policy creation and expiry, excess withdrawal, and zero-withdrawal rollback all finalized with `MAJORITY_AGREE` leader receipts. Core read methods and resulting policy, evidence, accounting, and expiry state were verified through GenLayerJS.
 
 - Scope or peril selection.
 - Data source or source mapping.
